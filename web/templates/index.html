@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Confluence Q&A Search</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Navigation Bar -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 py-3">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                        <i class="fas fa-book-reader text-blue-600 text-2xl mr-2"></i>
+                        <h1 class="text-xl font-semibold text-gray-800">Confluence Q&A Search</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="toggleSettings()" class="text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            <!-- Search Section -->
+            <div class="mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex flex-col space-y-4">
+                        <div class="relative">
+                            <input type="text" 
+                                   id="search-input" 
+                                   class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="Ask a question..."
+                                   onkeyup="handleKeyPress(event)">
+                            <button onclick="search()" 
+                                    class="absolute right-2 top-2 px-4 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                                Search
+                            </button>
+                        </div>
+                        <div class="flex items-center space-x-4 text-sm text-gray-600">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="enhance-toggle" checked>
+                                <span>Enhance with AI</span>
+                            </label>
+                            <div id="search-stats" class="hidden">
+                                Found <span id="result-count">0</span> results in <span id="search-time">0</span>ms
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="space-y-6"></div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="hidden">
+                <div class="flex justify-center items-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50">
+            <div class="flex items-center justify-center min-h-screen px-4">
+                <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                    <div class="flex justify-between items-center px-6 py-4 border-b">
+                        <h3 class="text-lg font-semibold">Settings</h3>
+                        <button onclick="toggleSettings()" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="px-6 py-4">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Results per page</label>
+                                <select id="results-per-page" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="20">20</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">AI Model</label>
+                                <select id="ai-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <option value="gpt-4">GPT-4</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let searchTimeout;
+    let lastQuery = '';
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            search();
+        } else {
+            // Implement search suggestions
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const query = event.target.value;
+                if (query.length >= 3 && query !== lastQuery) {
+                    getSuggestions(query);
+                }
+            }, 300);
+        }
+    }
+
+    async function search() {
+        const query = document.getElementById('search-input').value;
+        const enhance = document.getElementById('enhance-toggle').checked;
+        
+        if (!query.trim()) return;
+        
+        showLoading(true);
+        const startTime = performance.now();
+
+        try {
+            const response = await fetch('/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    query: query,
+                    enhance: enhance,
+                    resultsPerPage: document.getElementById('results-per-page').value,
+                    model: document.getElementById('ai-model').value
+                })
+            });
+            
+            const results = await response.json();
+            const endTime = performance.now();
+            
+            displayResults(results);
+            updateSearchStats(results.length, endTime - startTime);
+            
+        } catch (error) {
+            showError('An error occurred while searching');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function displayResults(results) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = results.map(result => `
+            <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <div class="p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">${result.question}</h3>
+                    
+                    ${result.enhanced_answer ? `
+                        <div class="tabs flex space-x-4 mb-4">
+                            <button onclick="switchTab(this, 'enhanced-${result.reference.page_id}')" 
+                                    class="tab-active text-sm text-blue-600 border-b-2 border-blue-600 pb-1">
+                                Enhanced Answer
+                            </button>
+                            <button onclick="switchTab(this, 'original-${result.reference.page_id}')" 
+                                    class="text-sm text-gray-600 pb-1">
+                                Original Answer
+                            </button>
+                        </div>
+                        <div id="enhanced-${result.reference.page_id}" class="answer-content markdown">
+                            ${marked(result.enhanced_answer)}
+                        </div>
+                        <div id="original-${result.reference.page_id}" class="answer-content hidden">
+                            ${result.answer}
+                        </div>
+                    ` : `
+                        <div class="text-gray-700">${result.answer}</div>
+                    `}
+                    
+                    <div class="mt-4 flex flex-wrap items-center gap-2">
+                        ${result.categories.map(category => `
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                ${category}
+                            </span>
+                        `).join('')}
+                        <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                            ${result.metadata.complexity}
+                        </span>
+                    </div>
+                    
+                    <div class="mt-4 text-sm text-gray-600">
+                        <a href="${result.reference.page_url}" target="_blank" 
+                           class="flex items-center text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-external-link-alt mr-1"></i>
+                            ${result.reference.page_title}
+                        </a>
+                        ${result.reference.section ? `
+                            <span class="mx-2">|</span>
+                            <span>${result.reference.section}</span>
+                        ` : ''}
+                        <span class="mx-2">|</span>
+                        <span>Last modified: ${new Date(result.reference.last_modified).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showLoading(show) {
+        document.getElementById('loading').classList.toggle('hidden', !show);
+    }
+
+    function showError(message) {
+        // Implement error toast notification
+        console.error(message);
+    }
+
+    function updateSearchStats(resultCount, searchTime) {
+        const statsDiv = document.getElementById('search-stats');
+        document.getElementById('result-count').textContent = resultCount;
+        document.getElementById('search-time').textContent = Math.round(searchTime);
+        statsDiv.classList.remove('hidden');
+    }
+
+    function toggleSettings() {
+        document.getElementById('settings-modal').classList.toggle('hidden');
+    }
+
+    function switchTab(button, contentId) {
+        // Remove active state from all tabs in the group
+        const tabGroup = button.parentElement;
+        tabGroup.querySelectorAll('button').forEach(tab => {
+            tab.classList.remove('tab-active', 'text-blue-600', 'border-blue-600');
+            tab.classList.add('text-gray-600');
+        });
+        
+        // Add active state to clicked tab
+        button.classList.add('tab-active', 'text-blue-600', 'border-blue-600');
+        
+        // Hide all content and show selected content
+        const answerContents = tabGroup.parentElement.querySelectorAll('.answer-content');
+        answerContents.forEach(content => content.classList.add('hidden'));
+        document.getElementById(contentId).classList.remove('hidden');
+    }
+    </script>
+
+    <!-- Add Markdown support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html> 

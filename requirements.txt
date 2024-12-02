@@ -1,0 +1,13 @@
+atlassian-python-api
+openai
+flask
+python-dotenv
+beautifulsoup4
+lxml
+html5lib
+scikit-learn
+numpy
+textblob
+sentence-transformers
+faiss-cpu
+tenacity
