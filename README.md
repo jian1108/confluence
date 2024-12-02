@@ -64,3 +64,7 @@ A powerful system that crawls Confluence spaces, extracts Q&A content, and provi
 ### Installation
 
 1. Clone the repository:
+
+## GitHub Setup
+
+1. **Initialize Git Repository**:
